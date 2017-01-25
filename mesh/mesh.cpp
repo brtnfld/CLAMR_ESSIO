@@ -10207,9 +10207,9 @@ void Mesh::store_checkpoint(Crux *crux)
    mesh_memory.memory_add(int_dist_vals, (size_t)num_int_dist_vals, 4, "mesh_int_dist_vals", flags);
    flags = RESTART_DATA | REPLICATED_DATA;
    mesh_memory.memory_add(int_vals, (size_t)num_int_vals, 4, "mesh_int_vals", flags);
-   mesh_memory.memory_add(double_vals, (size_t)num_double_vals, 8, "mesh_double_vals", flags);
 
    flags = RESTART_DATA;
+   mesh_memory.memory_add(double_vals, (size_t)num_double_vals, 8, "mesh_double_vals", flags);
    mesh_memory.memory_add(cpu_counters, (size_t)MESH_COUNTER_SIZE, 4, "mesh_cpu_counters", flags);
    mesh_memory.memory_add(gpu_counters, (size_t)MESH_COUNTER_SIZE, 4, "mesh_gpu_counters", flags);
 
