@@ -1437,11 +1437,11 @@ void Mesh::init(int nx, int ny, real_t circ_radius, partition_method initial_ord
 
    //KDTree_Initialize(&tree);
    if (ncells > 0) { // this is a restart.
+        nsizes.resize (numpe);
+        ndispl.resize (numpe);
        if (parallel && numpe > 1) {
 #ifdef HAVE_MPI
           int ncells_int = ncells;
-          nsizes.resize (numpe);
-          ndispl.resize (numpe);
           MPI_Allgather(&ncells_int, 1, MPI_INT, &nsizes[0], 1, MPI_INT, MPI_COMM_WORLD);
           ndispl[0]=0;
           for (int ip=1; ip<numpe; ip++){
@@ -8173,7 +8173,6 @@ void Mesh::do_load_balance_local(size_t numcells, float *weight, MallocPlus &sta
       }
 //    }
 #endif
-
    for (int ip=0; ip<numpe; ip++){
       nsizes_old = nsizes[ip];
       nsizes[ip] = ncells_global/numpe;
@@ -10284,9 +10283,9 @@ void Mesh::restore_checkpoint(Crux *crux)
 
    // Check version number
    if (int_vals[ 0] != CRUX_MESH_VERSION) {
-      printf("CRUX version mismatch for mesh data, version on file is %d, version in code is %d\n",
-         int_vals[0], CRUX_MESH_VERSION);
-      exit(0);
+       printf("CRUX version mismatch for mesh data, version on file is %d, version in code is %d\n",
+          int_vals[0], CRUX_MESH_VERSION);
+       exit(0);
    }
 
    // Copy out scalar values from array

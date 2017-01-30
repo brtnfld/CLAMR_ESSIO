@@ -410,7 +410,6 @@ int main(int argc, char **argv) {
       }
       next_graphics_cycle += graphic_outputInterval;
    }
-
 #ifdef HAVE_GRAPHICS
    set_display_circle_radius(circle_radius);
    init_display(&argc, argv, "Shallow Water");
@@ -426,7 +425,7 @@ int main(int argc, char **argv) {
    //  Set flag to show mesh results rather than domain decomposition.
    view_mode = 1;
 
-   if (ncycle == next_cp_cycle) store_crux_data(crux, ncycle); 
+   if (ncycle == next_cp_cycle) store_crux_data(crux, ncycle);
 
    cpu_timer_start(&tstart);
 #ifdef HAVE_GRAPHICS
@@ -445,7 +444,7 @@ __itt_pause();
 __SSC_MARK(0x222);
 #endif
 #endif
-   
+    
    return 0;
 }
 
