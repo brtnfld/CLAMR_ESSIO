@@ -101,8 +101,9 @@ int L7_Terminate (void)
 		ierr = MPI_Finalized ( &flag );
 		if ( !flag ){
 #ifdef HDF5_FF
-		        MPI_Barrier( MPI_COMM_WORLD );
-                        EFF_finalize();
+		  H5VLdaosm_term();
+/* 		        MPI_Barrier( MPI_COMM_WORLD ); */
+/*                         EFF_finalize(); */
 #endif
 			ierr = MPI_Finalize ();
 			L7_ASSERT( ierr == MPI_SUCCESS, "MPI_Finalize", ierr );

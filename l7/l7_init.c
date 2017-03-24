@@ -48,6 +48,7 @@
 #include <dlfcn.h>
 #ifdef HDF5_FF
 #include "hdf5.h"
+#include <daos.h>
 #endif
 
 #define L7_LOCATION "L7_INIT"
@@ -151,7 +152,22 @@ int L7_Init (
     }
 
 #ifdef HDF5_FF
-    EFF_init( MPI_COMM_WORLD, MPI_INFO_NULL);
+    uuid_t pool_uuid;
+    char *pool_grp = NULL;
+    char* uuid;
+    
+    uuid = getenv ("pid");
+    printf(" uuid %s\n", uuid);
+    if (uuid!=NULL)
+      if(uuid_parse( uuid, pool_uuid)<0)
+	printf("uuid_parse failed\n");
+    
+    /* Initialize VOL */
+    //printf("H5VLdaosm_init \n");
+    if(H5VLdaosm_init(MPI_COMM_WORLD, pool_uuid, pool_grp) < 0)
+      printf("Could not initialize VOL\n"); 
+
+    //     EFF_init( MPI_COMM_WORLD, MPI_INFO_NULL);
 #endif
       
     if (*numpes != -1) {
