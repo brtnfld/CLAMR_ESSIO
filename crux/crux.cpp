@@ -770,8 +770,8 @@ void Crux::restore_begin(char *restart_file, int rollback_counter)
             printf(  "  Restoring state from disk file %s\n",restart_file);
             printf(  "  ================================================================\n\n");
         }
-	is_restart = true;
 #ifdef HAVE_HDF5
+	is_restart = true;
 // # ifdef HDF5_FF
 // 	uuid_t pool_uuid;
 // 	char *pool_grp = NULL;
