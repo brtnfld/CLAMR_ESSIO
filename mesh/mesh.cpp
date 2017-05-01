@@ -1595,15 +1595,27 @@ void Mesh::init(int nx, int ny, real_t circ_radius, partition_method initial_ord
 
 size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 {
-   //int nl, nr, nt, nb;
-   //int nlt, nrt, ntr, nbr;
+   vector<int> mpot_old;
 
-   rezone_count(mpot, icount, jcount);
-
-   int newcount = icount;
-   int newcount_global = newcount;
+   int newcount;
+   int newcount_global;
 
    struct timeval tstart_lev2;
+
+#ifdef _OPENMP
+#pragma omp parallel
+{ //START Parallel Region
+#endif
+
+   rezone_count_threaded(mpot, icount, jcount);
+
+#ifdef _OPENMP
+#pragma omp master
+{//MASTER START
+#endif
+   newcount = icount;
+   newcount_global = newcount;
+
    if (TIMING_LEVEL >= 2) cpu_timer_start(&tstart_lev2);
 
 #ifdef HAVE_MPI
@@ -1612,32 +1624,38 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
    }
 #endif
 
+#ifdef _OPENMP
+}//END MASTER
+#pragma omp barrier
+#endif
+
    if(newcount_global > 0 && levmx > 1) {
-      int levcount = 1;
+
       size_t my_ncells=ncells;
       if (parallel) my_ncells=ncells_ghost;
 
+#ifdef _OPENMP
+#pragma omp master
+{//MASTER START
+#endif
       cpu_counters[MESH_COUNTER_REFINE_SMOOTH]++;
 
-      vector<int> mpot_old(my_ncells);
-
-      while (newcount_global > 0 && levcount < levmx){
-       //  levcount++; 
-         //newcount=0;
-
-         //mpot.swap(mpot_old);
-
+      mpot_old.resize(my_ncells);
 #ifdef _OPENMP
-#pragma omp parallel
-{//START Parallel Region
+}//END MASTER
+#pragma omp barrier
 #endif
+
+      int levcount = 1;
        
+      while (newcount_global > 0 && levcount < levmx){
+
+         levcount++; 
 #ifdef _OPENMP
 #pragma omp master
 {//MASTER START
 #endif
 
-         levcount++; 
          mpot.swap(mpot_old);
          newcount=0;
 #ifdef HAVE_MPI
@@ -1654,10 +1672,10 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
          int upperBound, lowerBound;
          get_bounds(upperBound, lowerBound);
          int mynewcount = newcount; //All threads get a mynewcount
+
 #ifdef _OPENMP
 #pragma omp for reduction(+:newcount)
 #endif
-
          for(uint ic = 0; ic < ncells; ic++) {
         // for(uint ic = lowerBound; ic < upperBound; ic++){
             int lev = level[ic];
@@ -1671,7 +1689,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
    
                if(ll - lev > 1) {
                   mpot[ic]=1;
-//#pragma omp atomic update
                   mynewcount++;
                   continue;
                }
@@ -1685,7 +1702,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 
                      if(llt - lev > 1) {
                         mpot[ic]=1;
-//#pragma omp atomic update
                         mynewcount++;
                         continue;
                      }
@@ -1700,7 +1716,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
    
                if(lr - lev > 1) {
                   mpot[ic]=1;
-//#pragma omp atomic update
                   mynewcount++;
                   continue;
                }
@@ -1714,7 +1729,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 
                      if(lrt - lev > 1) {
                         mpot[ic]=1;
-//#pragma omp atomic update
                         mynewcount++;
                         continue;
                      }
@@ -1729,7 +1743,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
    
                if(lt - lev > 1) {
                   mpot[ic]=1;
-//#pragma omp atomic update
                   mynewcount++;
                   continue;
                }
@@ -1743,7 +1756,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 
                      if(ltr - lev > 1) {
                         mpot[ic]=1;
-//#pragma omp atomic update
                         mynewcount++;
                         continue;
                      }
@@ -1758,7 +1770,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
    
                if(lb - lev > 1) {
                   mpot[ic]=1;
-//#pragma omp atomic update
                   mynewcount++;
                   continue;
                }
@@ -1772,7 +1783,6 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 
                      if(lbr - lev > 1) {
                         mpot[ic]=1;
-//#pragma omp atomic update
                         mynewcount++;
                         continue;
                      }
@@ -1783,18 +1793,15 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 #ifdef _OPENMP
 #pragma omp atomic 
 #endif
-      newcount += mynewcount;
-
-
-
-
-         icount += newcount;
-         newcount_global = newcount;
+         newcount += mynewcount;
 
 #ifdef _OPENMP
+#pragma omp barrier
 #pragma omp master
 {
 #endif
+         icount += newcount;
+         newcount_global = newcount;
 
 #ifdef HAVE_MPI
          if (parallel) {
@@ -1807,24 +1814,15 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 #pragma omp barrier
 #endif
 
-#ifdef _OPENMP
-#pragma omp barrier
-}//END Parallel Region
-#endif
+      } // while (newcount_global > 0 && levcount < levmx);
 
-         //newcount_global = newcount;
-         //icount += newcount;
-         
-//#ifdef HAVE_MPI
- //        if (parallel) {
-  //          MPI_Allreduce(&newcount, &newcount_global, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-//         }
-//#endif
-
-      //printf("%d: newcount is %d newcount_global %d levmx %d\n",levcount,newcount,newcount_global,levmx);
-      //} while (newcount > 0 && levcount < 10);
-      }// while (newcount_global > 0 && levcount < levmx);
    }
+
+
+#ifdef _OPENMP
+#pragma omp master
+{
+#endif
 
 #ifdef HAVE_MPI
    if (numpe > 1) {
@@ -1832,12 +1830,17 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
   }
 #endif
 
-   vector<int> mpot_old(ncells_ghost);
+   mpot_old.clear();
+   mpot_old.resize(ncells_ghost);
 
    mpot_old.swap(mpot);
+#ifdef _OPENMP
+}//END MASTER
+#pragma omp barrier
+#endif
 
 #ifdef _OPENMP
-#pragma omp parallel for
+#pragma omp for
 #endif
    for(uint ic=0; ic<ncells; ic++) {
       mpot[ic] = mpot_old[ic];
@@ -1878,6 +1881,11 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
       }
    }
 
+#ifdef _OPENMP
+#pragma omp master
+{
+#endif
+
 #ifdef HAVE_MPI
    if (numpe > 1) {
       L7_Update(&mpot[0], L7_INT, cell_handle);
@@ -1885,9 +1893,13 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 #endif
 
    mpot_old.swap(mpot);
+#ifdef _OPENMP
+}//END MASTER
+#pragma omp barrier
+#endif
 
 #ifdef _OPENMP
-#pragma omp parallel for
+#pragma omp for
 #endif
    for(uint ic=0; ic<ncells; ic++) {
       int n1=0, n2=0, n3=0;
@@ -1929,6 +1941,11 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
       }
    }
 
+#ifdef _OPENMP
+#pragma omp master
+{
+#endif
+
 #ifdef HAVE_MPI
    if (numpe > 1) {
       L7_Update(&mpot[0], L7_INT, cell_handle);
@@ -1936,7 +1953,12 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
 #endif
 
 #ifdef _OPENMP
-#pragma omp parallel for
+}//END MASTER
+#pragma omp barrier
+#endif
+
+#ifdef _OPENMP
+#pragma omp for
 #endif
    for (uint ic=0; ic<ncells; ic++) {
       if (celltype[ic] < 0) {
@@ -1956,6 +1978,11 @@ size_t Mesh::refine_smooth(vector<int> &mpot, int &icount, int &jcount)
          }
       }
    }
+
+#ifdef _OPENMP
+#pragma omp barrier
+}//END Parallel Region
+#endif
 
    newcount = ncells + rezone_count(mpot, icount, jcount);
 
@@ -2355,6 +2382,42 @@ int Mesh::rezone_count(vector<int> mpot, int &icount, int &jcount)
    return(icount+jcount);
 }
 
+int Mesh::rezone_count_threaded(vector<int> mpot, int &icount, int &jcount)
+{
+   static int my_icount=0;
+   static int my_jcount=0;
+
+#ifdef _OPENMP
+#pragma omp for reduction (+:my_jcount,my_icount)
+#endif
+   for (uint ic=0; ic<ncells; ++ic){
+      if (mpot[ic] < 0) {
+         if (celltype[ic] == REAL_CELL) {
+            // remove all but cell that will remain to get count right when split
+            // across processors
+            if (! is_lower_left(i[ic],j[ic]) ) my_jcount--;
+         } else {
+            // either upper right or lower left will remain for boundary cells
+            if (! (is_upper_right(i[ic],j[ic]) || is_lower_left(i[ic],j[ic]) ) ) my_jcount--;
+         }
+      }
+
+      if (mpot[ic] > 0) {
+         //printf("mpot[%d] = %d level %d levmx %d\n",ic,mpot[ic],level[ic],levmx);
+         if (celltype[ic] == REAL_CELL){
+            my_icount += 3;
+         } else {
+            my_icount ++;
+         }
+      }
+   }
+   //printf("icount is %d\n",my_icount);
+   icount = my_icount;
+   jcount = my_jcount;
+
+   return(icount+jcount);
+}
+
 #ifdef HAVE_OPENCL
 void Mesh::gpu_rezone_count2(size_t block_size, size_t local_work_size, cl_mem dev_redscratch, cl_mem &dev_result)
 {
@@ -2724,13 +2787,15 @@ void Mesh::rezone_all(int icount, int jcount, vector<int> mpot, int have_state, 
 #pragma omp master
    {
 #endif
-   i_old     = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "i_old",     flags);
-   j_old     = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "j_old",     flags);
-   level_old = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "level_old", flags);
-
-   mesh_memory.memory_swap(&i,     &i_old);
-   mesh_memory.memory_swap(&j,     &j_old);
-   mesh_memory.memory_swap(&level, &level_old);
+   int *i_new     = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "i_new",     flags);
+   int *j_new     = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "j_new",     flags);
+   int *level_new = (int *)mesh_memory.memory_malloc(new_ncells, sizeof(int), "level_new", flags);
+   i_old = i;
+   j_old = j;
+   level_old = level;
+   i = i_new;
+   j = j_new;
+   level = level_new;
 
    index.clear();
    index.resize(new_ncells);
@@ -2922,19 +2987,19 @@ void Mesh::rezone_all(int icount, int jcount, vector<int> mpot, int have_state, 
       } //  Complete refinement needed.
    } //  Complete addition of new cells to the mesh.
 
-   mesh_memory.memory_delete(i_old);
-   mesh_memory.memory_delete(j_old);
-   mesh_memory.memory_delete(level_old);
+   i     = (int *)mesh_memory.memory_replace(i_old,     i);
+   j     = (int *)mesh_memory.memory_replace(j_old,     j);
+   level = (int *)mesh_memory.memory_replace(level_old, level);
 
    calc_celltype(new_ncells);
 
    if (have_state){
       flags = RESTART_DATA;
       MallocPlus state_memory_old = state_memory;
-      malloc_plus_memory_entry *memory_item;
+      list<malloc_plus_memory_entry>::iterator memory_item;
 
       for (memory_item = state_memory_old.memory_entry_begin();
-           memory_item != state_memory_old.memory_entry_end();
+           memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
            memory_item = state_memory_old.memory_entry_next() ) {
          //printf("DEBUG -- it.mem_name %s elsize %lu\n",memory_item->mem_name,memory_item->mem_elsize);
          if (memory_item->mem_elsize == 8) {
@@ -3232,9 +3297,9 @@ void Mesh::rezone_all(int icount, int jcount, vector<int> mpot, int have_state, 
    if (have_state){
 
       static MallocPlus state_memory_old;
-      static malloc_plus_memory_entry *memory_begin;
-      static malloc_plus_memory_entry *memory_end;
-      static malloc_plus_memory_entry *memory_next;
+
+      static list<malloc_plus_memory_entry>::iterator memory_next;
+      static list<malloc_plus_memory_entry>::iterator memory_begin;
 
 #ifdef _OPENMP
 #pragma omp barrier
@@ -3244,14 +3309,13 @@ void Mesh::rezone_all(int icount, int jcount, vector<int> mpot, int have_state, 
       state_memory_old = state_memory;
 
       memory_begin = state_memory_old.memory_entry_begin();
-      memory_end   = state_memory_old.memory_entry_end();
 #ifdef _OPENMP
       } // end master region
 #pragma omp barrier
 #endif
 
-      for (malloc_plus_memory_entry *memory_item = memory_begin;
-           memory_item != memory_end;
+      for (list<malloc_plus_memory_entry>::iterator memory_item = memory_begin;
+           memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
            memory_item = memory_next ) {
          //ref_entry = 0;
          //printf("DEBUG -- memory_item->mem_name %s elsize %lu\n",memory_item->mem_name,memory_item->mem_elsize);
@@ -3736,10 +3800,10 @@ void Mesh::gpu_rezone_all(int icount, int jcount, cl_mem &dev_mpot, MallocPlus &
    ezcl_enqueue_ndrange_kernel(command_queue, kernel_rezone_all,   1, NULL, &global_work_size, &local_work_size, NULL);
 
    MallocPlus gpu_state_memory_old = gpu_state_memory;
-   malloc_plus_memory_entry *memory_item;
+   list<malloc_plus_memory_entry>::iterator memory_item;
 
    for (memory_item = gpu_state_memory_old.memory_entry_begin();
-        memory_item != gpu_state_memory_old.memory_entry_end();
+        memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
         memory_item = gpu_state_memory_old.memory_entry_next() ) {
       //printf("DEBUG -- it.mem_name %s elsize %lu\n",memory_item->mem_name,memory_item->mem_elsize);
       cl_mem dev_state_mem_ptr = (cl_mem)memory_item->mem_ptr;
@@ -4192,67 +4256,67 @@ void Mesh::calc_neighbors(int ncells)
 
 void Mesh::calc_neighbors_local(void)
 {
-   if (do_rezone) {
-
    struct timeval tstart_cpu;
    cpu_timer_start(&tstart_cpu);
 
-   int flags = INDEX_ARRAY_MEMORY;
+   if (do_rezone) {
+
+      int flags = INDEX_ARRAY_MEMORY;
 
 #if defined (HAVE_J7)
-   if (parallel) flags |= LOAD_BALANCE_MEMORY;
+      if (parallel) flags |= LOAD_BALANCE_MEMORY;
 #endif
 
 #ifdef _OPENMP
 #pragma omp master
-   {
+      {
 #endif
-   cpu_counters[MESH_COUNTER_CALC_NEIGH]++;
+      cpu_counters[MESH_COUNTER_CALC_NEIGH]++;
 
-   if (mesh_memory.get_memory_size(nlft) < ncells){
-      if (nlft != NULL) nlft = (int *)mesh_memory.memory_delete(nlft);
-      if (nrht != NULL) nrht = (int *)mesh_memory.memory_delete(nrht);
-      if (nbot != NULL) nbot = (int *)mesh_memory.memory_delete(nbot);
-      if (ntop != NULL) ntop = (int *)mesh_memory.memory_delete(ntop);
-      nlft = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nlft", flags);
-      nrht = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nrht", flags);
-      nbot = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nbot", flags);
-      ntop = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "ntop", flags);
-   }
+      if (mesh_memory.get_memory_size(nlft) < ncells){
+         if (nlft != NULL) nlft = (int *)mesh_memory.memory_delete(nlft);
+         if (nrht != NULL) nrht = (int *)mesh_memory.memory_delete(nrht);
+         if (nbot != NULL) nbot = (int *)mesh_memory.memory_delete(nbot);
+         if (ntop != NULL) ntop = (int *)mesh_memory.memory_delete(ntop);
+         nlft = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nlft", flags);
+         nrht = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nrht", flags);
+         nbot = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "nbot", flags);
+         ntop = (int *)mesh_memory.memory_malloc(ncells, sizeof(int), "ntop", flags);
+      }
 #ifdef _OPENMP
-   }
+      }
 #pragma omp barrier
 #endif
 
-   int lowerBound, upperBound;
-   set_bounds(ncells);
-   get_bounds(lowerBound, upperBound);
-   for (int ic = lowerBound; ic < upperBound; ic++){
-      nlft[ic] = -98;
-      nrht[ic] = -98;
-      nbot[ic] = -98;
-      ntop[ic] = -98;
-   }
+      int lowerBound, upperBound;
+      set_bounds(ncells);
+      get_bounds(lowerBound, upperBound);
+      for (int ic = lowerBound; ic < upperBound; ic++){
+         nlft[ic] = -98;
+         nrht[ic] = -98;
+         nbot[ic] = -98;
+         ntop[ic] = -98;
+      }
 
-   if (calc_neighbor_type == HASH_TABLE) {
+      if (calc_neighbor_type == HASH_TABLE) {
 
-      struct timeval tstart_lev2;
-      if (TIMING_LEVEL >= 2) cpu_timer_start(&tstart_lev2);
+         struct timeval tstart_lev2;
+         if (TIMING_LEVEL >= 2) cpu_timer_start(&tstart_lev2);
 
-      ncells_ghost = ncells;
+         ncells_ghost = ncells;
 
-      // Find maximum i column and j row for this processor
-      static int jmintile, imintile, jmaxtile, imaxtile;
+         // Find maximum i column and j row for this processor
+         static int jmintile, imintile, jmaxtile, imaxtile;
 
 #ifdef _OPENMP
 #pragma omp barrier
 #pragma omp master
          {
 #endif
-      jmintile = (jmax+1)*IPOW2(levmx);
-      imintile = (imax+1)*IPOW2(levmx);
-      jmaxtile = 0;
-      imaxtile = 0;
+         jmintile = (jmax+1)*IPOW2(levmx);
+         imintile = (imax+1)*IPOW2(levmx);
+         jmaxtile = 0;
+         imaxtile = 0;
 #ifdef _OPENMP
          }
 #pragma omp barrier
@@ -6168,89 +6232,85 @@ void Mesh::calc_neighbors_local(void)
 #pragma omp barrier
 #endif
 
-   } else if (calc_neighbor_type == KDTREE) {
+      } else if (calc_neighbor_type == KDTREE) {
 #ifdef _OPENMP
 #pragma omp barrier
 #pragma omp master
-      {
+         {
 #endif
-      struct timeval tstart_lev2;
-      if (TIMING_LEVEL >= 2) cpu_timer_start(&tstart_lev2);
+         struct timeval tstart_lev2;
+         if (TIMING_LEVEL >= 2) cpu_timer_start(&tstart_lev2);
 
-      TBounds box;
-      vector<int> index_list(IPOW2(levmx*levmx) );
+         TBounds box;
+         vector<int> index_list(IPOW2(levmx*levmx) );
 
-      int num;
+         int num;
 
-      ibase = 0;
-      calc_spatial_coordinates(ibase);
+         ibase = 0;
+         calc_spatial_coordinates(ibase);
 
-      kdtree_setup();
+         kdtree_setup();
 
-      if (TIMING_LEVEL >= 2) {
-         cpu_timers[MESH_TIMER_KDTREE_SETUP] += cpu_timer_stop(tstart_lev2);
-         cpu_timer_start(&tstart_lev2);
-      }
+         if (TIMING_LEVEL >= 2) {
+            cpu_timers[MESH_TIMER_KDTREE_SETUP] += cpu_timer_stop(tstart_lev2);
+            cpu_timer_start(&tstart_lev2);
+         }
 
-      for (uint ic=0; ic<ncells; ic++) {
+         for (uint ic=0; ic<ncells; ic++) {
 
-         //left
-         nlft[ic]  = ic;
-         box.min.x = x[ic]-0.25*dx[ic];
-         box.max.x = x[ic]-0.25*dx[ic];
-         box.min.y = y[ic]+0.25*dy[ic];
-         box.max.y = y[ic]+0.25*dy[ic];
-         KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
-         if (num == 1) nlft[ic]=index_list[0];
+            //left
+            nlft[ic]  = ic;
+            box.min.x = x[ic]-0.25*dx[ic];
+            box.max.x = x[ic]-0.25*dx[ic];
+            box.min.y = y[ic]+0.25*dy[ic];
+            box.max.y = y[ic]+0.25*dy[ic];
+            KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
+            if (num == 1) nlft[ic]=index_list[0];
 
-         //right
-         nrht[ic]  = ic;
-         box.min.x = x[ic]+1.25*dx[ic];
-         box.max.x = x[ic]+1.25*dx[ic];
-         box.min.y = y[ic]+0.25*dy[ic];
-         box.max.y = y[ic]+0.25*dy[ic];
-         KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
-         if (num == 1) nrht[ic]=index_list[0];
+            //right
+            nrht[ic]  = ic;
+            box.min.x = x[ic]+1.25*dx[ic];
+            box.max.x = x[ic]+1.25*dx[ic];
+            box.min.y = y[ic]+0.25*dy[ic];
+            box.max.y = y[ic]+0.25*dy[ic];
+            KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
+            if (num == 1) nrht[ic]=index_list[0];
 
-         //bot
-         nbot[ic]  = ic;
-         box.min.x = x[ic]+0.25*dx[ic];
-         box.max.x = x[ic]+0.25*dx[ic];
-         box.min.y = y[ic]-0.25*dy[ic];
-         box.max.y = y[ic]-0.25*dy[ic];
-         KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
-         if (num == 1) nbot[ic]=index_list[0];
+            //bot
+            nbot[ic]  = ic;
+            box.min.x = x[ic]+0.25*dx[ic];
+            box.max.x = x[ic]+0.25*dx[ic];
+            box.min.y = y[ic]-0.25*dy[ic];
+            box.max.y = y[ic]-0.25*dy[ic];
+            KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
+            if (num == 1) nbot[ic]=index_list[0];
 
-         //top
-         ntop[ic]  = ic;
-         box.min.x = x[ic]+0.25*dx[ic];
-         box.max.x = x[ic]+0.25*dx[ic];
-         box.min.y = y[ic]+1.25*dy[ic];
-         box.max.y = y[ic]+1.25*dy[ic];
-         KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
-         if (num == 1) ntop[ic]=index_list[0];
-      }  //  End main loop over cells.
+            //top
+            ntop[ic]  = ic;
+            box.min.x = x[ic]+0.25*dx[ic];
+            box.max.x = x[ic]+0.25*dx[ic];
+            box.min.y = y[ic]+1.25*dy[ic];
+            box.max.y = y[ic]+1.25*dy[ic];
+            KDTree_QueryBoxIntersect(&tree, &num, &(index_list[0]), &box);
+            if (num == 1) ntop[ic]=index_list[0];
+         }  //  End main loop over cells.
 
-      KDTree_Destroy(&tree);
+         KDTree_Destroy(&tree);
 
-      if (TIMING_LEVEL >= 2) cpu_timers[MESH_TIMER_KDTREE_QUERY] += cpu_timer_stop(tstart_lev2);
+         if (TIMING_LEVEL >= 2) cpu_timers[MESH_TIMER_KDTREE_QUERY] += cpu_timer_stop(tstart_lev2);
 
 #ifdef _OPENMP
-      }
+         }
 #pragma omp barrier
 #endif
-   } // calc_neighbor_type
+      } // calc_neighbor_type
+
+   }
 
 #ifdef _OPENMP
 #pragma omp master
 #endif
    cpu_timers[MESH_TIMER_CALC_NEIGHBORS] += cpu_timer_stop(tstart_cpu);
-
-   }
-
-#ifdef _OPENMP
-#pragma omp barrier
-#endif
 }
 
 #ifdef HAVE_OPENCL
@@ -8227,10 +8287,10 @@ void Mesh::do_load_balance_local(size_t numcells, float *weight, MallocPlus &sta
       if (parallel) flags = LOAD_BALANCE_MEMORY;
 #endif
 
-      malloc_plus_memory_entry *memory_item;
+      list<malloc_plus_memory_entry>::iterator memory_item;
 
       for (memory_item = state_memory_old.memory_entry_begin();
-           memory_item != state_memory_old.memory_entry_end();
+           memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
            memory_item = state_memory_old.memory_entry_next() ) {
 
          //printf("DEBUG -- it.mem_name %s elsize %lu\n",memory_item->mem_name,memory_item->mem_elsize);
@@ -8428,10 +8488,10 @@ int Mesh::gpu_do_load_balance_local(size_t numcells, float *weight, MallocPlus &
       cl_mem dev_state_var_upper = ezcl_malloc(NULL, const_cast<char *>("dev_state_var_upper"), &up_block_size, sizeof(cl_real_t), CL_MEM_READ_WRITE, 0);
 
       MallocPlus gpu_state_memory_old = gpu_state_memory;
-      malloc_plus_memory_entry *memory_item;
+      list<malloc_plus_memory_entry>::iterator memory_item;
 
       for (memory_item = gpu_state_memory_old.memory_entry_begin();
-           memory_item != gpu_state_memory_old.memory_entry_end();
+           memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
            memory_item = gpu_state_memory_old.memory_entry_next() ) {
          //printf("DEBUG -- it.mem_name %s elsize %lu\n",memory_item->mem_name,memory_item->mem_elsize);
          cl_mem dev_state_mem_ptr = (cl_mem)memory_item->mem_ptr;
