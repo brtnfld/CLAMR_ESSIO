@@ -101,7 +101,7 @@ void map_name_to_hdf5 (const char*, int, char*, char*);
 void access_named_hdf5_values (const char *name, int name_size,
                               hsize_t rank, hsize_t *cur_size, 
                               void *values, hid_t datatype,
-                              bool shared, bool store);
+                              bool store);
 #endif
 
 
@@ -176,12 +176,10 @@ Crux::~Crux()
 
 void Crux::store_MallocPlus(MallocPlus memory){
     list<malloc_plus_memory_entry>::iterator memory_item;
-    int mype = 0;
-    int npes = 1;
 
 #ifdef HAVE_MPI
+    int mype = 0;
     MPI_Comm_rank(MPI_COMM_WORLD,&mype);
-    MPI_Comm_size(MPI_COMM_WORLD,&npes);
 #endif
 
     for (memory_item = memory.memory_entry_begin();
@@ -216,7 +214,7 @@ void Crux::store_MallocPlus(MallocPlus memory){
                               mem_ptr, 
                               memory_item->mem_elsize == 4 ? 
                               H5T_NATIVE_INT : H5T_NATIVE_DOUBLE,
-                              memory_item->mem_flags & REPLICATED_DATA, true);
+                              true);
         } else {
 #endif
             int num_elements = 1;
@@ -246,16 +244,14 @@ void Crux::store_MallocPlus(MallocPlus memory){
 void Crux::store_begin(size_t nsize, int ncycle)
 {
 
-  int mype = 0;
-  int npes = 1;
+   int mype = 0;
 
 #ifdef HAVE_MPI
-    MPI_Comm_rank(MPI_COMM_WORLD,&mype);
-    MPI_Comm_size(MPI_COMM_WORLD,&npes);
+   MPI_Comm_rank(MPI_COMM_WORLD,&mype);
 #endif
 
 #if DEMO
-    ncycle_demo = ncycle;
+   ncycle_demo = ncycle;
 #endif
 
    cp_num = checkpoint_counter % num_of_rollback_states;
@@ -382,14 +378,14 @@ void map_name_to_hdf5 (const char *name, int name_size,
 void access_named_hdf5_values (const char *name, int name_size,
                               hsize_t rank, hsize_t *sizes, 
                               void *values, hid_t datatype,
-                              bool shared, bool store)
+                              bool store)
 {
     size_t length = 0, count = 1, offset = 0;
     char groupname[512], fieldname[512];
     hid_t hid_group, hid_space, hid_mem, hid_dataset, hid_plist = H5P_DEFAULT;
-    herr_t ret;
+
     map_name_to_hdf5(name, name_size, groupname, fieldname);
-    for (int i=0; i<rank; i++)
+    for (hsize_t i=0; i<rank; i++)
         count *= sizes[i];
 #ifdef HAVE_MPI
     hid_plist = H5Pcreate(H5P_DATASET_XFER);
@@ -485,7 +481,7 @@ void Crux::store_named_ints(const char *name, int name_size, int *int_vals, size
 #ifdef HAVE_HDF5
     if (USE_HDF5) {
         access_named_hdf5_values (name, name_size, 1, (hsize_t *) &nelem, 
-                                 int_vals, H5T_NATIVE_INT, false, true);
+                                 int_vals, H5T_NATIVE_INT, true);
 
     } else {
 #endif
@@ -501,7 +497,7 @@ void Crux::restore_named_ints(const char *name, int name_size, int *int_vals, si
 #ifdef HAVE_HDF5
     if (USE_HDF5) {
         access_named_hdf5_values (name, name_size, 1, (hsize_t *) &nelem, 
-                                 int_vals, H5T_NATIVE_INT, false, false);
+                                 int_vals, H5T_NATIVE_INT, false);
 
     } else {
 #endif
@@ -723,8 +719,7 @@ void Crux::restore_MallocPlus(MallocPlus memory){
                     (hsize_t *) memory_item->mem_nelem, 
                     mem_ptr, 
                     memory_item->mem_elsize == 4 ? 
-                    H5T_NATIVE_INT : H5T_NATIVE_DOUBLE,
-                    memory_item->mem_flags & REPLICATED_DATA, false);
+                    H5T_NATIVE_INT : H5T_NATIVE_DOUBLE, false);
         } else {
 #endif
             int num_elements = 1;
