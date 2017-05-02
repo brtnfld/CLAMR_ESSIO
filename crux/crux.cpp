@@ -175,9 +175,7 @@ Crux::~Crux()
 }
 
 void Crux::store_MallocPlus(MallocPlus memory){
-#ifdef XXX
-    malloc_plus_memory_entry *memory_item;
-
+    list<malloc_plus_memory_entry>::iterator memory_item;
     int mype = 0;
     int npes = 1;
 
@@ -186,9 +184,9 @@ void Crux::store_MallocPlus(MallocPlus memory){
     MPI_Comm_size(MPI_COMM_WORLD,&npes);
 #endif
 
-    for (memory_item = memory.memory_entry_by_name_begin(); 
-            memory_item != memory.memory_entry_by_name_end();
-            memory_item = memory.memory_entry_by_name_next() ){
+    for (memory_item = memory.memory_entry_begin();
+	 memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
+	 memory_item = memory.memory_entry_next() ) {
 
         void *mem_ptr = memory_item->mem_ptr;
         if ((memory_item->mem_flags & RESTART_DATA) == 0) continue;
@@ -242,7 +240,6 @@ void Crux::store_MallocPlus(MallocPlus memory){
         }
 #ifdef HAVE_HDF5   
     }
-#endif   
 #endif
 }
 
@@ -695,12 +692,12 @@ void Crux::store_end(void)
 int restore_type = RESTORE_NONE;
 
 void Crux::restore_MallocPlus(MallocPlus memory){
-#ifdef XXX
     char test_name[34];
-    malloc_plus_memory_entry *memory_item;
-    for (memory_item = memory.memory_entry_by_name_begin(); 
-            memory_item != memory.memory_entry_by_name_end();
-            memory_item = memory.memory_entry_by_name_next() ){
+    list<malloc_plus_memory_entry>::iterator memory_item;
+    for (memory_item = memory.memory_entry_begin();
+	 memory_item != (list<malloc_plus_memory_entry>::iterator) NULL;
+	 memory_item = memory.memory_entry_next() ) {
+
         void *mem_ptr = memory_item->mem_ptr;
         if ((memory_item->mem_flags & RESTART_DATA) == 0) continue;
         if (DEBUG) {
@@ -758,7 +755,6 @@ void Crux::restore_MallocPlus(MallocPlus memory){
         }
 #ifdef HAVE_HDF5
     }
-#endif    
 #endif
 }
 
