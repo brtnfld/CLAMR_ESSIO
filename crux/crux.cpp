@@ -344,6 +344,8 @@ hid_t create_hdf5_parallel_file_plist()
         printf("HDF5: Could set libver bounds \n");
 # ifdef HDF5_FF
     H5Pset_fapl_daosm(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
+    if(H5Pset_all_coll_metadata_ops(plist_id, true) < 0)
+        printf("HDF5: Could not set collective metadata \n");
 # else
     H5Pset_fapl_mpio(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL);
 # endif
@@ -767,21 +769,6 @@ void Crux::restore_begin(char *restart_file, int rollback_counter)
         }
 #ifdef HAVE_HDF5
 	is_restart = true;
-// # ifdef HDF5_FF
-// 	uuid_t pool_uuid;
-// 	char *pool_grp = NULL;
-// 	char* uuid;
-	
-// 	uuid = getenv ("pid");
-// 	printf(" uuid %s\n", uuid);
-// 	if (uuid!=NULL)
-// 	  if(uuid_parse( uuid, pool_uuid)<0)
-// 	    printf("uuid_parse failed\n");
-	  
-// 	/* Initialize VOL */
-// 	if(H5VLdaosm_init(MPI_COMM_WORLD, pool_uuid, pool_grp) < 0)
-// 	  printf("Could not initialize VOL\n");
-// # endif
         if (USE_HDF5) {
             hid_t plist_id = create_hdf5_parallel_file_plist();
 
